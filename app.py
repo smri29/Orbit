@@ -1,3 +1,12 @@
+# --- 1. DEPLOYMENT FIX (Safe for both Windows & Cloud) ---
+try:
+    __import__('pysqlite3')
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass  # Pass silently if running locally on Windows
+# ---------------------------------------------------------
+
 import streamlit as st
 import os
 from dotenv import load_dotenv
@@ -10,16 +19,16 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_chroma import Chroma
 
-# 1. Load API Keys
+# 2. Load API Keys
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# 2. Setup the Page
+# 3. Setup the Page
 st.set_page_config(page_title="Orbit 🪐", page_icon="🪐")
 st.title("Orbit 🪐")
 st.caption("The CollabCircle Research Assistant")
 
-# 3. Initialize the 'Brain' (Session State)
+# 4. Initialize the 'Brain' (Session State)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "vector_store" not in st.session_state:
@@ -53,7 +62,7 @@ with st.sidebar:
                     os.remove(uploaded_file.name)
 
                 # C. Store in Vector Database (Chroma) using LOCAL Embeddings
-                # This runs on your laptop (CPU), so it's free and has no rate limits!
+                # This runs on your laptop (CPU) AND Cloud, free with no rate limits!
                 st.session_state.vector_store = Chroma.from_documents(
                     documents=all_splits,
                     embedding=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2"),
@@ -66,12 +75,12 @@ with st.sidebar:
 
 # --- MAIN: Chat Interface ---
 
-# 4. Display Chat History
+# 5. Display Chat History
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 5. Handle User Input
+# 6. Handle User Input
 if prompt := st.chat_input("Ask a question about CollabCircle research..."):
     # Show user message
     st.chat_message("user").markdown(prompt)
@@ -95,8 +104,8 @@ if prompt := st.chat_input("Ask a question about CollabCircle research..."):
                 ("human", "{input}"),
             ])
 
-            # C. Define the LLM (Gemini 1.5 Flash)
-            # We still use Google for the answer generation because it's smart!
+            # C. Define the LLM (Gemini Flash)
+            # Using the stable Flash alias for best free-tier availability
             llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
             
             # D. Create the Chain (The Pipeline)
