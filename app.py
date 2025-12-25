@@ -1,122 +1,82 @@
-# --- 1. DEPLOYMENT FIX (Safe for both Windows & Cloud) ---
+# --- 1. DEPLOYMENT FIX (Must remain at top) ---
 try:
     __import__('pysqlite3')
     import sys
     sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 except ImportError:
     pass
-# ---------------------------------------------------------
+# ----------------------------------------------
 
 import streamlit as st
 import os
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_chroma import Chroma
+import backend  # Import our new logic file
 
-# 2. Load API Keys
+# 2. Config
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# 3. Setup the Page
-st.set_page_config(page_title="Orbit 🪐", page_icon="🪐")
-st.title("Orbit 🪐")
-st.caption("The CollabCircle Research Assistant")
+st.set_page_config(page_title="Orbit 🪐", page_icon="🪐", layout="wide")
 
-# 4. Initialize the 'Brain' (Session State)
+# 3. Initialize Session State
+if "vector_store" not in st.session_state:
+    st.session_state.vector_store = backend.get_vector_store()
+
+# --- FIX: Set the Greeting ONE TIME at startup ---
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.messages = [
+        {"role": "assistant", "content": "Hi, I'm Orbit! The AI assistant for CollabCircle. How may I help you?"}
+    ]
 
-# --- CRITICAL CHANGE: Load the Persistent Brain ---
-# We check if the database already exists. If yes, we load it!
-embedding_function = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-persist_directory = "./chroma_db"
+# --- UI: Header ---
+st.title("Orbit 🪐")
+st.caption("The Knowledge Hub for CollabCircle")
 
-if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
-    st.session_state.vector_store = Chroma(
-        persist_directory=persist_directory, 
-        embedding_function=embedding_function
-    )
-else:
-    st.session_state.vector_store = None
-
-# --- SIDEBAR: Admin Mode ---
+# --- UI: Sidebar (Admin Mode) ---
 with st.sidebar:
-    st.header("⚙️ Knowledge Base")
-    st.info("Orbit is running on pre-loaded CollabCircle data.")
+    st.header("⚙️ Settings")
     
-    # Optional: Keep this hidden or password protected in future
-    with st.expander("Update Knowledge (Admin Only)"):
-        uploaded_files = st.file_uploader("Upload New Research", type="pdf", accept_multiple_files=True)
-        if st.button("Process & Update"):
-            if uploaded_files:
-                with st.spinner("Updating Brain..."):
-                    all_splits = []
-                    for uploaded_file in uploaded_files:
-                        with open(uploaded_file.name, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
-                        loader = PyPDFLoader(uploaded_file.name)
-                        docs = loader.load()
-                        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-                        splits = text_splitter.split_documents(docs)
-                        all_splits.extend(splits)
-                        os.remove(uploaded_file.name)
+    # Check if Brain is loaded
+    if st.session_state.vector_store:
+        st.success("🟢 System Online")
+    else:
+        st.error("🔴 Brain Missing")
 
-                    # Update the persistent DB
-                    st.session_state.vector_store = Chroma.from_documents(
-                        documents=all_splits,
-                        embedding=embedding_function,
-                        persist_directory=persist_directory
-                    )
-                    st.success("Knowledge Base Updated!")
+    # Admin Panel
+    with st.expander("Admin: Update Knowledge"):
+        password = st.text_input("Admin Password", type="password")
+        if password == "collab123": # Simple lock mechanism
+            uploaded_files = st.file_uploader("Upload New Research", type="pdf", accept_multiple_files=True)
+            if st.button("Update Database"):
+                if uploaded_files:
+                    with st.spinner("Processing..."):
+                        st.session_state.vector_store = backend.update_knowledge_base(uploaded_files)
+                        st.success("Database Updated!")
 
-# --- MAIN: Chat Interface ---
-
+# --- UI: Chat Loop ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Ask Orbit..."):
+if prompt := st.chat_input("Ask about CollabCircle..."):
+    # Add User Message
     st.chat_message("user").markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
 
+    # Generate Response
     if st.session_state.vector_store:
         try:
-            retriever = st.session_state.vector_store.as_retriever()
+            rag_chain = backend.get_rag_chain(st.session_state.vector_store)
             
-            # --- CRITICAL CHANGE: Identity & Persona ---
-            system_prompt = (
-                "You are Orbit, the AI assistant for CollabCircle. "
-                "Your tone is helpful, professional, and encouraging. "
-                "Always start your very first interaction with: 'Hi, I'm Orbit! The AI assistant for CollabCircle. How may I help you?' "
-                "For subsequent questions, answer directly based on the context. "
-                "Use the following pieces of retrieved context to answer the question. "
-                "If you don't know the answer, say that you don't know based on the available documents. "
-                "Context: {context}"
-            )
-            
-            prompt_template = ChatPromptTemplate.from_messages([
-                ("system", system_prompt),
-                ("human", "{input}"),
-            ])
-
-            llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
-            question_answer_chain = create_stuff_documents_chain(llm, prompt_template)
-            rag_chain = create_retrieval_chain(retriever, question_answer_chain)
-
-            with st.spinner("Thinking..."):
+            with st.spinner("Accessing CollabCircle Archives..."):
                 response = rag_chain.invoke({"input": prompt})
                 answer = response["answer"]
 
+            # Add AI Message
             st.chat_message("assistant").markdown(answer)
             st.session_state.messages.append({"role": "assistant", "content": answer})
 
         except Exception as e:
             st.error(f"Error: {e}")
     else:
-        st.warning("Orbit's brain is missing! Please upload documents in the sidebar.")
+        st.warning("Orbit is offline. Please initialize the knowledge base.")
