@@ -10,13 +10,18 @@ except ImportError:
 import streamlit as st
 import os
 from dotenv import load_dotenv
-import backend  # Import our new logic file
+import backend  # Import our logic file
 
-# 2. Config
+# 2. Config & Branding
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-st.set_page_config(page_title="Orbit 🪐", page_icon="🪐", layout="wide")
+st.set_page_config(
+    page_title="Orbit 🪐", 
+    page_icon="🪐", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # 3. Initialize Session State
 if "vector_store" not in st.session_state:
@@ -28,12 +33,20 @@ if "messages" not in st.session_state:
         {"role": "assistant", "content": "Hi, I'm Orbit! The AI assistant for CollabCircle. How may I help you?"}
     ]
 
-# --- UI: Header ---
-st.title("Orbit 🪐")
-st.caption("The Knowledge Hub for CollabCircle")
-
-# --- UI: Sidebar (Admin Mode) ---
+# --- UI: Sidebar (Logo & Admin) ---
 with st.sidebar:
+    # 1. DISPLAY LOGO
+    # Use columns to center the logo nicely
+    col1, col2, col3 = st.columns([1, 2, 1]) 
+    with col2:
+        # Check if file exists to prevent errors
+        if os.path.exists("assets/logo.jpeg"):
+            st.image("assets/logo.jpeg", width=100)
+        else:
+            st.warning("Logo not found")
+            
+    st.markdown("---") # Divider line
+    
     st.header("⚙️ Settings")
     
     # Check if Brain is loaded
@@ -45,13 +58,24 @@ with st.sidebar:
     # Admin Panel
     with st.expander("Admin: Update Knowledge"):
         password = st.text_input("Admin Password", type="password")
-        if password == "collab123": # Simple lock mechanism
+        if password == "collab123": 
             uploaded_files = st.file_uploader("Upload New Research", type="pdf", accept_multiple_files=True)
             if st.button("Update Database"):
                 if uploaded_files:
                     with st.spinner("Processing..."):
                         st.session_state.vector_store = backend.update_knowledge_base(uploaded_files)
                         st.success("Database Updated!")
+
+# --- UI: Main Header ---
+col_a, col_b = st.columns([1, 5])
+with col_a:
+    if os.path.exists("assets/logo.jpeg"):
+        st.image("assets/logo.jpeg", width=70)
+with col_b:
+    st.title("Orbit 🪐")
+    st.caption("The Knowledge Hub for CollabCircle")
+
+st.markdown("---")
 
 # --- UI: Chat Loop ---
 for message in st.session_state.messages:
