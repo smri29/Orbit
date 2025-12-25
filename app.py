@@ -40,8 +40,8 @@ with st.sidebar:
     col1, col2, col3 = st.columns([1, 2, 1]) 
     with col2:
         # Check if file exists to prevent errors
-        if os.path.exists("assets/logo.png"):
-            st.image("assets/logo.png", width=100)
+        if os.path.exists("assets/orbit_logo.png"):
+            st.image("assets/orbit_logo.png", width=100)
         else:
             st.warning("Logo not found")
             
@@ -69,8 +69,8 @@ with st.sidebar:
 # --- UI: Main Header ---
 col_a, col_b = st.columns([1, 5])
 with col_a:
-    if os.path.exists("assets/logo.png"):
-        st.image("assets/logo.png", width=70)
+    if os.path.exists("assets/orbit_logo.png"):
+        st.image("assets/orbit_logo.png", width=70)
 with col_b:
     st.title("Orbit 🪐")
     st.caption("The Knowledge Hub for CollabCircle")
