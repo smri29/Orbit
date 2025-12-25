@@ -69,8 +69,8 @@ with st.sidebar:
 # --- UI: Main Header ---
 col_a, col_b = st.columns([1, 5])
 with col_a:
-    if os.path.exists("assets/logo.jpeg"):
-        st.image("assets/logo.jpeg", width=70)
+    if os.path.exists("assets/logo.png"):
+        st.image("assets/logo.png", width=70)
 with col_b:
     st.title("Orbit 🪐")
     st.caption("The Knowledge Hub for CollabCircle")
